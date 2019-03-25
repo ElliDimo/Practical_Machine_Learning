@@ -1,0 +1,84 @@
+---
+title: "Practical Machine Learning Assignment"
+author: "Dimopoulou E."
+date: "March 25, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Loading the data
+
+First, the training and testing data sets were loaded and training data were further split to sub-train and sub-test sets to perform cross validation.
+
+```{r cache=TRUE}
+download.file('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv','data.csv')
+download.file('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv','test.csv')
+
+training <- read.csv('data.csv')
+testing <- read.csv('test.csv')
+
+# Dividing training to sub-train and sub-test sets to do cross-validation
+inTrain = createDataPartition(training$classe, p = 3/4)[[1]]
+subtrain = training[ inTrain,]
+subtest = training[-inTrain,]
+```
+
+## Handling missing values
+
+Out of the 160 columns of the sub-train data set, 67 columns had only NA values, and were thus omitted from the sub-train data set. Also, out of the 93 remaining columns, 33 columns included categorical data, from which 14421 out of 14718 rows had value ' '. These 33 columns were also omitted from the sub-train data set.
+
+```{r}
+# Removing columns, where all rows have NAs in
+subtrain1 <- subtrain[ ,colSums(is.na(subtrain)) == 0]
+# For the below columns, 14421 out of 14718 rows had value ''
+lista <- names(subtrain1[which(colSums(subtrain1=='')!=0)])
+# Omitting these 33 columns from subtrain set
+subtrain2<-subtrain1[which(colSums(subtrain1=='')==0)]
+```
+
+## Model fit
+
+Three types of models were fitted on the sub-train data set : 
+- a classification tree
+- a random forest
+- a boosting model
+
+```{r}
+library(caret)
+set.seed(1)
+rpart.mod <- train(subtrain2[,-60],subtrain2$classe,method='rpart',trControl=trainControl(method="none"))
+set.seed(1)
+rf.mod <- train(subtrain2[,-60],subtrain2$classe,tuneGrid=data.frame(mtry=3),trControl=trainControl(method="none"))
+set.seed(1)
+gbm.mod <- train(subtrain2[,-60],subtrain2$classe,method='gbm',trControl=trainControl(method="none"),verbose=F)
+```
+
+## Cross validation
+
+Cross validation was performed for each model on the sub-test data set.
+
+```{r}
+rpart.pred <- predict(rpart.mod,subtest)
+table(subtest$classe,rpart.pred)
+
+rf.pred <- predict(rf.mod,subtest)
+table(subtest$classe,rf.pred)
+
+gbm.pred <- predict(gbm.mod,subtest)
+table(subtest$classe,gbm.pred)
+```
+
+
+## Model selection
+
+From the cross validation tables, it is obvious that the rpart method is not the appropriate one for this data, whereas random forest and boosting appear to be highly accurate, with random forest model's prediction being 1/4904~0.02% more accurate than the boosting model's predictions. The estimated out of sample error for the random forest model is given by the OOB estimate of error rate and is equal to 0.03%. 
+
+```{r}
+rf.mod$finalModel
+```
+
+The expected out of sample error for the boosting model is estimated around 0.06%-0.1%, calculated as circa 3/4904-5/4904.
